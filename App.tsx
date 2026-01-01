@@ -7,6 +7,7 @@ import {
   TimerReset, 
   Sparkles,
   Volume2,
+  VolumeX,
   Menu,
   X
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import { ko } from 'date-fns/locale';
 
 import { TabType, Alarm } from './types';
 import { getSmartGreeting, getAlarmMotivation } from './services/messageService';
+import { soundService } from './services/soundService';
 
 // Sub-components
 import DigitalClock from './components/DigitalClock';
@@ -29,8 +31,8 @@ const STORAGE_KEY = 'dreamy_alarms';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('clock');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isMuted, setIsMuted] = useState(false);
   
-  // Initialize alarms from localStorage
   const [alarms, setAlarms] = useState<Alarm[]>(() => {
     const savedAlarms = localStorage.getItem(STORAGE_KEY);
     if (savedAlarms) {
@@ -48,7 +50,6 @@ const App: React.FC = () => {
   const [aiMessage, setAiMessage] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Save alarms to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(alarms));
   }, [alarms]);
@@ -77,7 +78,20 @@ const App: React.FC = () => {
     if (matchingAlarm) {
       setRingingAlarm(matchingAlarm);
       getAlarmMotivation(matchingAlarm.label).then(setAiMessage);
+      soundService.startAlarm(); // 사운드 시작
     }
+  };
+
+  const handleMuteToggle = () => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    soundService.setMuted(nextMuted);
+    soundService.playClick();
+  };
+
+  const changeTab = (tab: TabType) => {
+    setActiveTab(tab);
+    soundService.playClick();
   };
 
   const addAlarm = (time: string, label: string) => {
@@ -89,6 +103,13 @@ const App: React.FC = () => {
       days: ['월', '화', '수', '목', '금', '토', '일']
     };
     setAlarms(prev => [...prev, newAlarm]);
+    soundService.playSuccess();
+  };
+
+  const dismissAlarm = () => {
+    setRingingAlarm(null);
+    soundService.stopAlarm(); // 사운드 중지
+    soundService.playClick();
   };
 
   const renderContent = () => {
@@ -98,13 +119,13 @@ const App: React.FC = () => {
         <AlarmList 
           alarms={alarms} 
           onAdd={addAlarm} 
-          onToggle={(id) => setAlarms(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a))} 
-          onDelete={(id) => setAlarms(prev => prev.filter(a => a.id !== id))} 
+          onToggle={(id) => { setAlarms(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a)); soundService.playClick(); }} 
+          onDelete={(id) => { setAlarms(prev => prev.filter(a => a.id !== id)); soundService.playClick(); }} 
         />
       );
       case 'timer': return <Timer />;
       case 'stopwatch': return <Stopwatch />;
-      case 'ai': return <AIScreen message={aiMessage} onRefresh={async () => setAiMessage(await getSmartGreeting(format(currentTime, 'HH:mm')))} />;
+      case 'ai': return <AIScreen message={aiMessage} onRefresh={async () => { setAiMessage(await getSmartGreeting(format(currentTime, 'HH:mm'))); soundService.playClick(); }} />;
       default: return <DigitalClock currentTime={currentTime} />;
     }
   };
@@ -147,7 +168,7 @@ const App: React.FC = () => {
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id as TabType)}
+              onClick={() => changeTab(item.id as TabType)}
               className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all duration-300 ${activeTab === item.id ? 'bg-pink-500 text-white shadow-lg shadow-pink-200 translate-x-2' : 'text-pink-300 hover:bg-pink-50 hover:text-pink-500'}`}
             >
               {item.icon}
@@ -156,8 +177,16 @@ const App: React.FC = () => {
           ))}
         </div>
 
-        <div className="p-8 text-center hidden lg:block">
-          <div className="bg-pink-50 p-4 rounded-3xl border border-pink-100">
+        <div className="p-6 flex flex-col gap-4">
+          <button 
+            onClick={handleMuteToggle}
+            className={`flex items-center gap-3 p-4 rounded-2xl transition-all ${isMuted ? 'text-gray-400 bg-gray-100' : 'text-pink-500 bg-pink-50'}`}
+          >
+            {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+            <span className="hidden lg:block font-bold text-sm">{isMuted ? '음소거 중' : '소리 켜짐'}</span>
+          </button>
+
+          <div className="p-4 rounded-3xl border border-pink-100 bg-white/50 text-center hidden lg:block">
             <p className="text-[10px] uppercase tracking-widest text-pink-400 font-bold mb-1">Current Date</p>
             <p className="text-sm font-extrabold text-pink-600">{format(currentTime, 'yyyy년 M월 d일', { locale: ko })}</p>
           </div>
@@ -173,9 +202,14 @@ const App: React.FC = () => {
             <Sparkles className="text-pink-500" size={24} />
             <span className="font-extrabold text-xl text-pink-600">Dreamy</span>
           </div>
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-pink-500">
-            <Menu size={28} />
-          </button>
+          <div className="flex gap-4">
+            <button onClick={handleMuteToggle} className="p-2 text-pink-400">
+              {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+            </button>
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-pink-500">
+              <Menu size={28} />
+            </button>
+          </div>
         </header>
 
         {/* Content View */}
@@ -194,7 +228,7 @@ const App: React.FC = () => {
           </AnimatePresence>
         </div>
 
-        {/* AI Mini Alert (Floating) */}
+        {/* Floating Message */}
         {activeTab !== 'ai' && aiMessage && (
           <motion.div 
             initial={{ y: 50, opacity: 0 }}
@@ -234,15 +268,12 @@ const App: React.FC = () => {
                 {menuItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => { setActiveTab(item.id as TabType); setIsSidebarOpen(false); }}
+                    onClick={() => { changeTab(item.id as TabType); setIsSidebarOpen(false); }}
                     className={`w-full flex items-center gap-6 text-2xl font-bold transition-all ${activeTab === item.id ? 'text-pink-500 scale-105' : 'text-pink-200'}`}
                   >
                     {item.icon} {item.label}
                   </button>
                 ))}
-              </div>
-              <div className="mt-auto pt-10 border-t border-pink-50">
-                <p className="text-pink-400 font-bold">{format(currentTime, 'E M월 d일', { locale: ko })}</p>
               </div>
             </motion.div>
           </>
@@ -260,7 +291,7 @@ const App: React.FC = () => {
              <h2 className="text-8xl font-black mb-4 tabular-nums">{ringingAlarm.time}</h2>
              <p className="text-4xl font-bold mb-12 opacity-80">{ringingAlarm.label}</p>
              <div className="bg-white/20 p-8 rounded-[3rem] backdrop-blur-xl mb-12 max-w-2xl text-xl italic font-medium leading-relaxed">"{aiMessage}"</div>
-             <button onClick={() => setRingingAlarm(null)} className="bg-white text-pink-600 px-16 py-6 rounded-full text-2xl font-black shadow-2xl hover:scale-110 active:scale-95 transition-all">알람 해제</button>
+             <button onClick={dismissAlarm} className="bg-white text-pink-600 px-16 py-6 rounded-full text-2xl font-black shadow-2xl hover:scale-110 active:scale-95 transition-all">알람 해제</button>
           </motion.div>
         )}
       </AnimatePresence>

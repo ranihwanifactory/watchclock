@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { soundService } from '../services/soundService';
 
 const Timer: React.FC = () => {
   const [totalSeconds, setTotalSeconds] = useState(60);
@@ -13,8 +14,9 @@ const Timer: React.FC = () => {
     let interval: any = null;
     if (isActive && timeLeft > 0) {
       interval = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-    } else if (timeLeft === 0) {
+    } else if (timeLeft === 0 && isActive) {
       setIsActive(false);
+      soundService.playSuccess(); // 완료 사운드
       clearInterval(interval);
     }
     return () => clearInterval(interval);
@@ -24,6 +26,19 @@ const Timer: React.FC = () => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const handleStart = () => {
+    if (isSetting) setIsSetting(false);
+    setIsActive(!isActive);
+    soundService.playClick();
+  };
+
+  const handleReset = () => {
+    setIsActive(false);
+    setIsSetting(true);
+    setTimeLeft(totalSeconds);
+    soundService.playClick();
   };
 
   const progress = (timeLeft / totalSeconds) * 100;
@@ -67,11 +82,11 @@ const Timer: React.FC = () => {
       </div>
 
       <div className="flex gap-8">
-        <button onClick={() => { setIsActive(false); setIsSetting(true); setTimeLeft(totalSeconds); }} className="p-8 bg-white border-2 border-pink-100 text-pink-300 rounded-[2.5rem] shadow-xl hover:text-pink-500 hover:border-pink-300 transition-all">
+        <button onClick={handleReset} className="p-8 bg-white border-2 border-pink-100 text-pink-300 rounded-[2.5rem] shadow-xl hover:text-pink-500 hover:border-pink-300 transition-all">
           <RotateCcw size={40} />
         </button>
         <button 
-          onClick={() => { if (isSetting) setIsSetting(false); setIsActive(!isActive); }} 
+          onClick={handleStart} 
           className="p-10 bg-pink-500 text-white rounded-[3rem] shadow-2xl shadow-pink-200 scale-125 hover:scale-[1.3] active:scale-110 transition-all"
         >
           {isActive ? <Pause size={48} /> : <Play size={48} />}
