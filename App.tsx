@@ -24,13 +24,34 @@ import Timer from './components/Timer';
 import Stopwatch from './components/Stopwatch';
 import AIScreen from './components/AIScreen';
 
+const STORAGE_KEY = 'dreamy_alarms';
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('clock');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [alarms, setAlarms] = useState<Alarm[]>([]);
+  
+  // Initialize alarms from localStorage
+  const [alarms, setAlarms] = useState<Alarm[]>(() => {
+    const savedAlarms = localStorage.getItem(STORAGE_KEY);
+    if (savedAlarms) {
+      try {
+        return JSON.parse(savedAlarms);
+      } catch (e) {
+        console.error("Failed to parse saved alarms", e);
+        return [];
+      }
+    }
+    return [];
+  });
+
   const [ringingAlarm, setRingingAlarm] = useState<Alarm | null>(null);
   const [aiMessage, setAiMessage] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Save alarms to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(alarms));
+  }, [alarms]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -73,7 +94,14 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'clock': return <DigitalClock currentTime={currentTime} />;
-      case 'alarm': return <AlarmList alarms={alarms} onAdd={addAlarm} onToggle={(id) => setAlarms(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a))} onDelete={(id) => setAlarms(prev => prev.filter(a => a.id !== id))} />;
+      case 'alarm': return (
+        <AlarmList 
+          alarms={alarms} 
+          onAdd={addAlarm} 
+          onToggle={(id) => setAlarms(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a))} 
+          onDelete={(id) => setAlarms(prev => prev.filter(a => a.id !== id))} 
+        />
+      );
       case 'timer': return <Timer />;
       case 'stopwatch': return <Stopwatch />;
       case 'ai': return <AIScreen message={aiMessage} onRefresh={async () => setAiMessage(await getSmartGreeting(format(currentTime, 'HH:mm')))} />;
